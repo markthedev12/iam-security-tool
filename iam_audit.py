@@ -1,4 +1,4 @@
-python#!/usr/bin/env python3
+#!/usr/bin/env python3
 """
 IAM Security Audit Tool
 Author: Mark Schwinn
@@ -8,7 +8,9 @@ Version: 1.0
 """
 
 import datetime
-import os
+import argparse
+from html import escape
+from pathlib import Path
 
 RED = '\033[91m'
 GREEN = '\033[92m'
@@ -85,7 +87,7 @@ def check_shared_accounts():
     for user in USERS:
         total_checks += 1
         if user["shared_account"]:
-            flag_critical("Shared Accounts", user["username"], f"Account '{user['username']}' is a shared credential — HIPAA violation")
+            flag_critical("Shared Accounts", user["username"], f"Account '{user['username']}' is a shared credential — review unique-user attribution")
         else:
             passed_checks += 1
             flag_pass("Shared Accounts", user["username"], f"Unique account confirmed for {user['full_name']}")
@@ -147,7 +149,7 @@ def check_guest_accounts():
             passed_checks += 1
             flag_pass("Guest Accounts", user["username"], f"Not a guest account — no action needed")
 
-def generate_html_report():
+def generate_html_report(output_path="iam_audit_report.html"):
     timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     risk_score = 100 - (len(findings["critical"]) * 20) - (len(findings["high"]) * 10) - (len(findings["medium"]) * 5)
     risk_score = max(0, risk_score)
@@ -202,7 +204,7 @@ body{{font-family:'Courier New',monospace;background:#020408;color:#e0f0ff;margi
         if findings[severity]:
             html += f'<div class="section"><h2>{label}</h2>'
             for f in findings[severity]:
-                html += f'<div class="finding {css}"><strong>[{severity.upper()}]</strong> <strong>{f["user"]}</strong> — {f["detail"]}</div>'
+                html += f'<div class="finding {css}"><strong>[{severity.upper()}]</strong> <strong>{escape(str(f["user"]))}</strong> — {escape(str(f["detail"]))}</div>'
             html += '</div>'
 
     html += f"""
@@ -211,12 +213,22 @@ body{{font-family:'Courier New',monospace;background:#020408;color:#e0f0ff;margi
 <p>// NIST SP 800-53 AC-2, AC-3, AC-6 | HIPAA Security Rule 45 CFR 164.312</p>
 </div></body></html>"""
 
-    report_path = os.path.expanduser("~/iam-security-audit/iam_audit_report.html")
-    with open(report_path, "w") as f:
-        f.write(html)
-    return report_path
+    report_path = Path(output_path)
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    report_path.write_text(html, encoding="utf-8")
+    return str(report_path)
 
-def main():
+def reset_findings():
+    global total_checks, passed_checks
+    total_checks = passed_checks = 0
+    for values in findings.values():
+        values.clear()
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description="Simulated identity-policy review using fictional accounts")
+    parser.add_argument("--output", default="iam_audit_report.html")
+    args = parser.parse_args(argv)
+    reset_findings()
     print_banner()
     print(f"  {WHITE}Starting IAM Security Audit...{RESET}")
     print(f"  {WHITE}Scanning {len(USERS)} user accounts across 6 security domains{RESET}\n")
@@ -244,7 +256,7 @@ def main():
     else:
         print(f"\n  {GREEN}{BOLD}[OK] LOW RISK — Environment is largely compliant{RESET}")
     print(f"\n  {WHITE}Generating HTML report...{RESET}")
-    report_path = generate_html_report()
+    report_path = generate_html_report(args.output)
     print(f"  {GREEN}{BOLD}Report saved to: {report_path}{RESET}")
     print(f"\n  {CYAN}// Audit complete.{RESET}\n")
 
