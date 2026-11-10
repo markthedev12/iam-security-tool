@@ -1,3 +1,73 @@
+# Identity Security Auditor
+
+Python automation that turns an AWS IAM credential report into explainable JSON findings. Built to demonstrate identity security engineering: validate evidence, apply explicit rules, test boundaries, and report actionable results.
+
+**Status:** offline credential-report auditing implemented and tested. Live AWS collection and AI explanations are planned. The original AD simulation remains in `iam_audit.py`; its original documentation is retained below for reference.
+
+## Run a two-minute demo
+
+Python 3.11+; standard library only. Run from the repository root:
+
+```bash
+git clone https://github.com/markthedev12/iam-security-tool.git
+cd iam-security-tool
+# Until this PR is merged:
+git switch feat/identity-security-auditor
+python3 -m unittest discover -s tests -v
+python3 -m identity_auditor examples/credential-report.csv --as-of 2026-11-10T00:00:00Z
+```
+
+The synthetic fixture produces four findings across three accounts. Use `--fail-on high` to return exit 1 when a high or critical finding exists. Exit 0 means evaluation completed without findings at the selected blocking threshold; exit 2 means invalid input or an execution error. Default `--fail-on none` reports findings without blocking.
+
+## Implemented controls
+
+| Rule | Evidence | Result |
+| --- | --- | --- |
+| IAM-MFA-001 | Root or password-enabled user lacks registered MFA | Critical for root, high for IAM user |
+| IAM-ROOT-001 | Root access key is active | Critical |
+| IAM-KEY-001 | Active key age exceeds configurable threshold | High; default greater than 90 completed days |
+| IAM-DATA-001 | Active key rotation age unavailable | Medium; evidence needs review |
+
+Both key slots are evaluated. Rotation dates must include a timezone and cannot be in the future relative to the audit time. Input errors abort the entire scan without a partial JSON result. All times use the supplied `--as-of` timestamp or current UTC. These are local review rules, not compliance certification.
+
+## Architecture
+
+```text
+IAM credential CSV -> validated records -> pure rule engine -> versioned JSON -> CI exit policy
+                                                                  |
+                                                    future optional AI explanation
+```
+
+- `identity_auditor/engine.py`: validation and deterministic rules, no network calls or global audit state.
+- `identity_auditor/cli.py`: input, JSON output, and exit policy.
+- `tests/test_auditor.py`: healthy/risky fixtures, both slots, age boundaries, unknowns, invalid evidence, CLI behavior.
+- `examples/credential-report.csv`: synthetic data only; reduced to the columns this auditor consumes.
+- `docs/IMPLEMENTATION.md`: hands-on walkthrough and next implementation milestones.
+
+Full AWS reports with additional columns are accepted. Redirect output to a local file if needed. Real reports can contain identity information; keep them out of the repository. No input is sent externally, no AWS credentials are loaded, and no remediation is executed.
+
+## Important limits
+
+MFA registration does not establish MFA enforcement for sessions or API calls. Credential reports do not describe effective IAM permissions, role trust, Identity Center, SCPs, or all credential types. Key age is an organization-selected review threshold, not proof of compromise. An empty finding list only applies to the implemented rules and supplied rows; completeness and snapshot freshness are not established. Root rows are evaluated when present. No live AWS integration or AI capability is claimed in this release.
+
+AWS report semantics and collection permissions: [AWS IAM credential report documentation](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_getting-report.html).
+
+## Roadmap
+
+1. Optional boto3 collector with scoped IAM permissions, bounded polling, explicit collection failures, and freshness metadata.
+2. Policy/trust analysis with clearly documented semantic limits and test fixtures.
+3. Redacted cloud demonstration and approved before/after remediation evidence.
+4. Optional AI explanation layer with grounding and injection-resistance evaluation; detection stays deterministic.
+
+[Build it step by step](docs/IMPLEMENTATION.md).
+
+---
+
+<details>
+<summary>Original AD simulation documentation (historical; not the new auditor)</summary>
+
+The original script and documentation below are preserved. Known legacy issues: the script starts with an invalid `python#!` prefix and uses a fixed home-directory output path; the historical clone URL is incorrect. Its framework mappings, password assumptions, and compliance labels require review before reuse. Use the new module above for the tested demo.
+
 # IAM Security Audit Tool 🔐
 
 > A Python-based Identity and Access Management security audit tool that identifies common Active Directory misconfigurations and HIPAA compliance violations across user accounts.
@@ -138,3 +208,6 @@ The `USERS` list in `iam_audit.py` represents a simulated Active Directory envir
 ## License
 
 MIT License — free to use, modify, and distribute with attribution.
+
+</details>
+
