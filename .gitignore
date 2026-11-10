@@ -1,0 +1,6 @@
+__pycache__/
+*.py[cod]
+.venv/
+reports/
+credential-report.csv
+!examples/credential-report.csv
